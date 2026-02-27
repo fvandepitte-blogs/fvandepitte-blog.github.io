@@ -24,16 +24,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: fvandepitte-blogs
+          repositories: .github
         
       - name: Get latest release from source repo
         id: release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
 
           API_URL="https://api.github.com/repos/fvandepitte-blogs/.github/releases/latest"
           echo "Fetching latest release from: $API_URL"
 
-          LATEST_RELEASE="$(curl -sS -L "$API_URL")"
+          LATEST_RELEASE="$(curl -sS -L -H "Authorization: token $GH_TOKEN" "$API_URL")"
 
           TAG_NAME="$(echo "$LATEST_RELEASE" | jq -r '.tag_name // empty')"
           RELEASE_NAME="$(echo "$LATEST_RELEASE" | jq -r '.name // empty')"
@@ -56,8 +67,10 @@ jobs:
           echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"          
       - name: Download and extract release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          curl -L -o blogsite-dist.tar.gz "${{ steps.release.outputs.download_url }}"
+          curl -L -H "Authorization: token $GH_TOKEN" -H "Accept: application/octet-stream" -o blogsite-dist.tar.gz "${{ steps.release.outputs.download_url }}"
           mkdir -p dist
           tar -xzf blogsite-dist.tar.gz -C dist
           rm blogsite-dist.tar.gz
